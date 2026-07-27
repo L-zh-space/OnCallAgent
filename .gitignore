@@ -54,3 +54,6 @@ uploads/
 ### docker
 /volumes
 /server.pid
+
+### tutorial
+tutorial/
