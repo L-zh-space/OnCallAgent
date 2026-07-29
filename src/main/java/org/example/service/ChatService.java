@@ -1,18 +1,18 @@
 package org.example.service;
 
-import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
-import com.alibaba.cloud.ai.graph.agent.ReactAgent;
-import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
 import org.example.agent.tool.DateTimeTools;
 import org.example.agent.tool.InternalDocsTools;
 import org.example.agent.tool.QueryLogsTools;
 import org.example.agent.tool.QueryMetricsTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
+import com.alibaba.cloud.ai.graph.agent.ReactAgent;
+import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -23,6 +23,8 @@ import java.util.Map;
 /**
  * 聊天服务
  * 封装 ReactAgent 对话的公共逻辑，包括模型创建、系统提示词构建、Agent 配置等
+ * 当前 LLM 后端：DeepSeek（通过 OpenAI 兼容 API）
+ * Embedding 后端：DashScope（text-embedding-v4）
  */
 @Service
 public class ChatService {
@@ -44,32 +46,40 @@ public class ChatService {
     @Autowired
     private ToolCallbackProvider tools;
 
-    @Value("${spring.ai.dashscope.api-key}")
-    private String dashScopeApiKey;
+    @Value("${spring.ai.openai.api-key}")
+    private String apiKey;
+
+    @Value("${spring.ai.openai.base-url}")
+    private String baseUrl;
+
+    @Value("${spring.ai.openai.chat.options.model:deepseek-chat}")
+    private String model;
 
     /**
-     * 创建 DashScope API 实例
+     * 创建 OpenAI API 实例（指向 DeepSeek）
      */
-    public DashScopeApi createDashScopeApi() {
-        return DashScopeApi.builder()
-                .apiKey(dashScopeApiKey)
+    public OpenAiApi createOpenAiApi() {
+        return OpenAiApi.builder()
+                .apiKey(apiKey)
+                .baseUrl(baseUrl)
                 .build();
     }
 
     /**
      * 创建 ChatModel
+     * @param api         OpenAiApi 实例
      * @param temperature 控制随机性 (0.0-1.0)
-     * @param maxToken 最大输出长度
-     * @param topP 核采样参数
+     * @param maxToken    最大输出长度
+     * @param topP        核采样参数
      */
-    public DashScopeChatModel createChatModel(DashScopeApi dashScopeApi, double temperature, int maxToken, double topP) {
-        return DashScopeChatModel.builder()
-                .dashScopeApi(dashScopeApi)
-                .defaultOptions(DashScopeChatOptions.builder()
-                        .withModel(DashScopeChatModel.DEFAULT_MODEL_NAME)
-                        .withTemperature(temperature)
-                        .withMaxToken(maxToken)
-                        .withTopP(topP)
+    public OpenAiChatModel createChatModel(OpenAiApi api, double temperature, int maxToken, double topP) {
+        return OpenAiChatModel.builder()
+                .openAiApi(api)
+                .defaultOptions(OpenAiChatOptions.builder()
+                        .model(model)
+                        .temperature(temperature)
+                        .maxTokens(maxToken)
+                        .topP(topP)
                         .build())
                 .build();
     }
@@ -77,8 +87,8 @@ public class ChatService {
     /**
      * 创建标准对话 ChatModel（默认参数）
      */
-    public DashScopeChatModel createStandardChatModel(DashScopeApi dashScopeApi) {
-        return createChatModel(dashScopeApi, 0.7, 2000, 0.9);
+    public OpenAiChatModel createStandardChatModel(OpenAiApi api) {
+        return createChatModel(api, 0.7, 2000, 0.9);
     }
 
     /**
@@ -88,14 +98,14 @@ public class ChatService {
      */
     public String buildSystemPrompt(List<Map<String, String>> history) {
         StringBuilder systemPromptBuilder = new StringBuilder();
-        
+
         // 基础系统提示
         systemPromptBuilder.append("你是一个专业的智能助手，可以获取当前时间、查询天气信息、搜索内部文档知识库，以及查询 Prometheus 告警信息。\n");
         systemPromptBuilder.append("当用户询问时间相关问题时，使用 getCurrentDateTime 工具。\n");
         systemPromptBuilder.append("当用户需要查询公司内部文档、流程、最佳实践或技术指南时，使用 queryInternalDocs 工具。\n");
         systemPromptBuilder.append("当用户需要查询 Prometheus 告警、监控指标或系统告警状态时，使用 queryPrometheusAlerts 工具。\n");
         systemPromptBuilder.append("当用户需要查询腾讯云日志时，请调用腾讯云mcp服务查询,默认查询地域ap-guangzhou,查询时间范围为近一个月。\n\n");
-        
+
         // 添加历史消息
         if (!history.isEmpty()) {
             systemPromptBuilder.append("--- 对话历史 ---\n");
@@ -110,9 +120,9 @@ public class ChatService {
             }
             systemPromptBuilder.append("--- 对话历史结束 ---\n\n");
         }
-        
+
         systemPromptBuilder.append("请基于以上对话历史，回答用户的新问题。");
-        
+
         return systemPromptBuilder.toString();
     }
 
@@ -150,11 +160,11 @@ public class ChatService {
 
     /**
      * 创建 ReactAgent
-     * @param chatModel 聊天模型
+     * @param chatModel   聊天模型（OpenAiChatModel，底层为 DeepSeek）
      * @param systemPrompt 系统提示词
      * @return 配置好的 ReactAgent
      */
-    public ReactAgent createReactAgent(DashScopeChatModel chatModel, String systemPrompt) {
+    public ReactAgent createReactAgent(OpenAiChatModel chatModel, String systemPrompt) {
         return ReactAgent.builder()
                 .name("intelligent_assistant")
                 .model(chatModel)
@@ -166,7 +176,7 @@ public class ChatService {
 
     /**
      * 执行 ReactAgent 对话（非流式）
-     * @param agent ReactAgent 实例
+     * @param agent    ReactAgent 实例
      * @param question 用户问题
      * @return AI 回复
      */

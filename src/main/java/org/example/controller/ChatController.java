@@ -1,8 +1,8 @@
 package org.example.controller;
 
-import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
 import com.alibaba.cloud.ai.graph.NodeOutput;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
@@ -79,9 +79,9 @@ public class ChatController {
             List<Map<String, String>> history = session.getHistory();
             logger.info("会话历史消息对数: {}", history.size() / 2);
 
-            // 创建 DashScope API 和 ChatModel
-            DashScopeApi dashScopeApi = chatService.createDashScopeApi();
-            DashScopeChatModel chatModel = chatService.createStandardChatModel(dashScopeApi);
+            // 创建 OpenAI API（指向 DeepSeek）和 ChatModel
+            OpenAiApi openAiApi = chatService.createOpenAiApi();
+            OpenAiChatModel chatModel = chatService.createStandardChatModel(openAiApi);
 
             // 记录可用工具
             chatService.logAvailableTools();
@@ -167,9 +167,9 @@ public class ChatController {
                 List<Map<String, String>> history = session.getHistory();
                 logger.info("ReactAgent 会话历史消息对数: {}", history.size() / 2);
 
-                // 创建 DashScope API 和 ChatModel
-                DashScopeApi dashScopeApi = chatService.createDashScopeApi();
-                DashScopeChatModel chatModel = chatService.createStandardChatModel(dashScopeApi);
+                // 创建 OpenAI API（指向 DeepSeek）和 ChatModel
+                OpenAiApi openAiApi = chatService.createOpenAiApi();
+                OpenAiChatModel chatModel = chatService.createStandardChatModel(openAiApi);
 
                 // 记录可用工具
                 chatService.logAvailableTools();
@@ -289,14 +289,14 @@ public class ChatController {
             try {
                 logger.info("收到 AI 智能运维请求 - 启动多 Agent 协作流程");
 
-                DashScopeApi dashScopeApi = chatService.createDashScopeApi();
-                DashScopeChatModel chatModel = DashScopeChatModel.builder()
-                        .dashScopeApi(dashScopeApi)
-                        .defaultOptions(DashScopeChatOptions.builder()
-                                .withModel(DashScopeChatModel.DEFAULT_MODEL_NAME)
-                                .withTemperature(0.3)
-                                .withMaxToken(8000)
-                                .withTopP(0.9)
+                OpenAiApi openAiApi = chatService.createOpenAiApi();
+                OpenAiChatModel chatModel = OpenAiChatModel.builder()
+                        .openAiApi(openAiApi)
+                        .defaultOptions(OpenAiChatOptions.builder()
+                                .model("deepseek-chat")
+                                .temperature(0.3)
+                                .maxTokens(8000)
+                                .topP(0.9)
                                 .build())
                         .build();
 

@@ -10,18 +10,19 @@ import org.springframework.web.client.RestClient;
 import java.time.Duration;
 
 /**
- * DashScope API 配置
- * 用于配置超时时间等参数
+ * HTTP 客户端超时配置
+ * 同时适用于 DashScope Embedding API 和 DeepSeek Chat API 的 HTTP 调用
+ * Spring AI 会自动使用这个 RestClient.Builder Bean
  */
 @Configuration
 public class DashScopeConfig {
 
-    @Value("${spring.ai.dashscope.chat.options.timeout:180000}")
+    @Value("${http.client.timeout:180000}")
     private long timeout;
 
     /**
      * 配置 RestClient.Builder，设置超时时间
-     * Spring AI 会自动使用这个 Bean
+     * Spring AI 的 OpenAI Starter 和 DashScope SDK 共享此配置
      */
     @Bean
     public RestClient.Builder restClientBuilder() {
