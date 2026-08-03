@@ -10,10 +10,14 @@ DOCKER_COMPOSE_FILE = vector-database.yml
 MILVUS_CONTAINER = milvus-standalone
 
 # 颜色输出
+# 注意：Windows 下的 cmd 不支持 ANSI 转义（\033[...]），会原样打印导致乱码，
+# 因此仅在非 Windows 系统（Linux/macOS/Git Bash with sh）启用颜色。
+ifneq ($(OS),Windows_NT)
 GREEN = \033[0;32m
 YELLOW = \033[0;33m
 RED = \033[0;31m
 NC = \033[0m # No Color
+endif
 
 .PHONY: help init start stop restart check upload clean up down status wait
 
